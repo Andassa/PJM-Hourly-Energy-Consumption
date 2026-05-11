@@ -1,6 +1,6 @@
-# Prévision de la consommation énergétique (PJM) — LSTM, Bi-LSTM et Attention
+# Prévision de la consommation énergétique (PJM), LSTM, Bi-LSTM et attention
 
-Projet académique de groupe — Réseaux de neurones artificiels (RNA).
+Projet académique de groupe en réseaux de neurones artificiels (RNA).
 
 **Navigation rapide :** [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
 
@@ -22,7 +22,7 @@ Projet académique de groupe — Réseaux de neurones artificiels (RNA).
 ---
 
 <a id="recette-projet"></a>
-## Recette du projet — de zéro au livrable final
+## Recette du projet : de zéro au livrable final
 
 Analogie : le **plat final** = rapport HTML + table `metrics.csv` + graphiques + 3 modèles entraînés comparés (LSTM, Bi-LSTM, LSTM+Attention) + interprétation des poids d’attention. Les **ingrédients** = données PJME, Python, librairies listées plus bas. Les **ustensiles** = notebooks + dossier `src/` + `config.yaml`.
 
@@ -112,7 +112,7 @@ Les formules sont écrites en **LaTeX** (affichage correct sur GitHub, VS Code a
 
 ---
 
-### M1 — Normalisation Min-Max (paramètres estimés sur le **train** uniquement)
+### M1 : Normalisation Min-Max (paramètres estimés sur le **train** uniquement)
 
 Soit $x \in \mathbb{R}$ une valeur brute (ex. MW). Soient $x_{\min}$ et $x_{\max}$ le minimum et le maximum observés **sur le jeu d’entraînement** :
 
@@ -128,7 +128,7 @@ $$
 
 ---
 
-### M2 — Fonction de coût d’entraînement (régression sur 24 pas)
+### M2 : Fonction de coût d’entraînement (régression sur 24 pas)
 
 **MSE** (erreur quadratique moyenne) sur l’horizon $H=24$ pour un échantillon :
 
@@ -138,11 +138,11 @@ $$
 
 Sur un mini-batch de taille $B$, on moyenne en général sur le batch : $\displaystyle \mathcal{L} = \frac{1}{B}\sum_{b=1}^{B} \mathcal{L}_{\mathrm{MSE}}^{(b)}$.
 
-**Alternative L1** (MAE comme loss) : $\displaystyle \mathcal{L}_{\mathrm{L1}} = \frac{1}{24}\sum_{h=1}^{24} \bigl\lvert y_h - \hat{y}_h \bigr\rvert$ — à garder **identique** pour les trois modèles si l’on compare les losses.
+**Alternative L1** (MAE comme loss) : $\displaystyle \mathcal{L}_{\mathrm{L1}} = \frac{1}{24}\sum_{h=1}^{24} \bigl\lvert y_h - \hat{y}_h \bigr\rvert$. À garder **identique** pour les trois modèles si l’on compare les losses.
 
 ---
 
-### M3 — Cellule LSTM (quatre portes + états)
+### M3 : Cellule LSTM (quatre portes + états)
 
 À l’instant $t$, entrée $x_t$, états précédents $h_{t-1}$ et $C_{t-1}$. On note $z_t = [\,h_{t-1}\,;\,x_t\,]$ le vecteur concaténé. Les poids $W_f, W_i, W_C, W_o$ et biais $b_f, b_i, b_C, b_o$ sont les paramètres appris.
 
@@ -186,7 +186,7 @@ Dans PyTorch, `nn.LSTM` implémente ces relations ; les notations $W_f,\ldots$ c
 
 ---
 
-### M4 — Attention additive de Bahdanau (scores, softmax, contexte)
+### M4 : Attention additive de Bahdanau (scores, softmax, contexte)
 
 Soit $h_s \in \mathbb{R}^{d_h}$ la sortie cachée de la LSTM au pas $s$, avec $s \in \{1,\ldots,T\}$ et $T=168$. Soit $\mathbf{q}_t \in \mathbb{R}^{d_q}$ un vecteur **requête** (souvent $\mathbf{q}_t = h_T$ ou une couche linéaire appliquée à $h_T$). Soient $\mathbf{W}_h$, $\mathbf{W}_q$, $\mathbf{v}$ des paramètres appris (dimensions compatibles).
 
@@ -212,23 +212,23 @@ Les $\alpha_{t,s}$ se visualisent en **heatmap** sur les $T=168$ heures.
 
 ---
 
-### M5 — Métriques sur le jeu de test (après dénormalisation en MW)
+### M5 : Métriques sur le jeu de test (après dénormalisation en MW)
 
 Soit $n$ le nombre de points évalués, $y_i$ la valeur observée, $\hat{y}_i$ la prédiction (toutes deux en **MW**).
 
-**MAE** — erreur absolue moyenne :
+**MAE** : erreur absolue moyenne :
 
 $$
 \mathrm{MAE} \;=\; \frac{1}{n}\sum_{i=1}^{n} \bigl\lvert y_i - \hat{y}_i \bigr\rvert
 $$
 
-**RMSE** — racine de l’erreur quadratique moyenne :
+**RMSE** : racine de l’erreur quadratique moyenne :
 
 $$
 \mathrm{RMSE} \;=\; \sqrt{\,\frac{1}{n}\sum_{i=1}^{n} \bigl( y_i - \hat{y}_i \bigr)^{2}\,}
 $$
 
-**MAPE** — erreur relative moyenne en pourcentage :
+**MAPE** : erreur relative moyenne en pourcentage :
 
 $$
 \mathrm{MAPE} \;=\; \frac{100}{n}\sum_{i=1}^{n} \left\lvert \frac{y_i - \hat{y}_i}{y_i} \right\rvert \;\;(\%)
@@ -236,7 +236,7 @@ $$
 
 ---
 
-### M6 — Test de Diebold–Mariano (idée)
+### M6 : Test de Diebold–Mariano (idée)
 
 Pour chaque instant $i$, on définit une perte de prévision $L_i^{A}$ et $L_i^{B}$ (ex. $L_i = (y_i - \hat{y}_i)^2$ ou $L_i = \lvert y_i - \hat{y}_i\rvert$). La **différence de performance** instantanée est :
 
@@ -305,7 +305,7 @@ Vérification rapide : les deux premières lignes doivent ressembler à `Datetim
 
 ### 2.3 Ordre de grandeur
 
-- Période couverte : **2002 — 2018** (vérifier sur votre copie après chargement).  
+- Période couverte : **2002 à 2018** (vérifier sur votre copie après chargement).  
 - Fréquence : **1 point par heure**.  
 - Volume : **environ 145 000 lignes** (le fichier du dépôt contient ~145k enregistrements).  
 - Plage de valeurs typique : l’ordre de grandeur se situe entre ~19 000 MW et ~57 000 MW selon saison et heure ; les statistiques exactes sont à recalculer dans le notebook d’EDA.
@@ -418,7 +418,7 @@ Les valeurs $x_{\min}$ et $x_{\max}$ sont calculées **sur le sous-ensemble trai
 
 Chaque échantillon d’entraînement est donc :
 
-- **Entrée :** une matrice de forme `(168, n_features)` — typiquement les features listées plus haut + la série MW normalisée dans la fenêtre, selon la convention retenue (souvent la colonne MW et les features calendaires alignées pas à pas).  
+- **Entrée :** une matrice de forme `(168, n_features)`, en général avec les features listées plus haut et la série MW normalisée dans la fenêtre, selon la convention retenue (souvent la colonne MW et les features calendaires alignées pas à pas).  
 - **Sortie :** un vecteur de longueur **24** (valeurs MW futures normalisées, puis dénormalisées à l’évaluation).
 
 La convention exacte (est-ce que la fenêtre inclut uniquement le passé strict jusqu’à \(t\), et la cible \(t+1 \ldots t+24\) ?) doit être **écrite dans le code et dans le notebook** pour éviter un décalage d’une heure.
@@ -440,7 +440,7 @@ Les dates exactes dépendent du nombre d’enregistrements réels ; l’impléme
 
 Framework : **PyTorch**. Toutes les architectures partagent les mêmes dimensions d’entrée/sortie et le même prétraitement.
 
-### 7.1 Modèle 1 — LSTM (référence)
+### 7.1 Modèle 1 : LSTM (référence)
 
 - Empilement : **2 couches** LSTM.  
 - Taille de l’état caché : **128**.  
@@ -448,14 +448,14 @@ Framework : **PyTorch**. Toutes les architectures partagent les mêmes dimension
 - Tête de régression : couches fully-connected (ex. `128 → 64` avec activation ReLU, puis `64 → 24`).  
 - Agrégation temporelle : typiquement **dernier état caché** de la séquence (à préciser dans le code et figer pour toute l’équipe).
 
-### 7.2 Modèle 2 — Bi-LSTM
+### 7.2 Modèle 2 : Bi-LSTM
 
 - Même profondeur (2 couches) en **bidirectionnel**.  
 - La dimension concaténée avant la tête fully-connected est **256** (128 avant + 128 arrière) si concaténation standard.  
 - Même tête de sortie vers **24** valeurs.  
 - Attention au fait que la bidirectionnalité utilise des informations « futures » dans la fenêtre d’entrête : c’est acceptable **tant que la fenêtre ne contient que le passé relatif à l’instant de prédiction** ; ce point doit être clair dans le rapport (sinon risque de fuite conceptuelle si mal défini).
 
-### 7.3 Modèle 3 — LSTM + attention de Bahdanau
+### 7.3 Modèle 3 : LSTM + attention de Bahdanau
 
 - LSTM empilé produit une séquence de sorties cachées \(h_1, \ldots, h_{168}\).  
 - Couche d’attention implémentée **explicitement** (pas seulement un module « black box » sans exposition des poids), avec sortie :
@@ -571,10 +571,10 @@ Outils possibles : génération programmatique HTML, ou export depuis notebooks 
 
 | Module | Rôle | Fichiers principaux |
 |--------|------|---------------------|
-| **A — Données** | Téléchargement / copie vers `data/raw`, EDA, preprocessing, fenêtres, splits, artefacts `.pkl` | `notebooks/01_EDA.ipynb`, `src/preprocessing.py`, `src/feature_engineering.py` |
-| **B — Modèles** | Trois classes PyTorch + test de formes sur batch fictif | `src/models.py` |
-| **C — Entraînement** | Config, boucles, early stopping, checkpoints, logs | `config.yaml`, `src/train.py` |
-| **D — Évaluation** | Métriques, figures, CSV, rapport HTML, Diebold–Mariano | `src/evaluate.py`, `results/*` |
+| **A : Données** | Téléchargement / copie vers `data/raw`, EDA, preprocessing, fenêtres, splits, artefacts `.pkl` | `notebooks/01_EDA.ipynb`, `src/preprocessing.py`, `src/feature_engineering.py` |
+| **B : Modèles** | Trois classes PyTorch + test de formes sur batch fictif | `src/models.py` |
+| **C : Entraînement** | Config, boucles, early stopping, checkpoints, logs | `config.yaml`, `src/train.py` |
+| **D : Évaluation** | Métriques, figures, CSV, rapport HTML, Diebold–Mariano | `src/evaluate.py`, `results/*` |
 
 ### 11.2 Jalons suggérés
 
@@ -644,12 +644,12 @@ Les arguments exacts (`--model`, chemins, device) sont à harmoniser dans `train
 
 ## 13. Pièges courants à éviter
 
-1. **Scaler ajusté sur tout le dataset** — invalide la comparaison et gonfle artificiellement les performances.  
-2. **Shuffle global** des fenêtres sans garde-fou — mélange passé/futur ; si shuffle, le faire **à l’intérieur** du train uniquement après split.  
-3. **Fuite via la validation** — tuner des hyperparamètres sur le test ; réserver le test à la toute fin.  
-4. **MAPE** — vérifier les divisions par des valeurs très petites si autre jeu.  
-5. **Bi-LSTM** — clarifier dans le rapport ce que représente la bidirectionnalité dans la fenêtre.  
-6. **Reproductibilité** — sans graines fixes et sans version des librairies (`pip freeze` ou équivalent), les comparaisons inter-membres se dégradent.
+1. **Scaler ajusté sur tout le dataset** : invalide la comparaison et gonfle artificiellement les performances.  
+2. **Shuffle global** des fenêtres sans garde-fou : mélange passé/futur ; si shuffle, le faire **à l’intérieur** du train uniquement après split.  
+3. **Fuite via la validation** : tuner des hyperparamètres sur le test ; réserver le test à la toute fin.  
+4. **MAPE** : vérifier les divisions par des valeurs très petites si autre jeu.  
+5. **Bi-LSTM** : clarifier dans le rapport ce que représente la bidirectionnalité dans la fenêtre.  
+6. **Reproductibilité** : sans graines fixes et sans version des librairies (`pip freeze` ou équivalent), les comparaisons inter-membres se dégradent.
 
 ---
 
@@ -662,7 +662,7 @@ Les arguments exacts (`--model`, chemins, device) sont à harmoniser dans `train
 
 ---
 
-## Annexe — Ordre de lecture pour un nouveau membre
+## Annexe : Ordre de lecture pour un nouveau membre
 
 1. **[Recette](#recette-projet)** : vision d’ensemble en une table (étapes 0 à 13).  
 2. **[Glossaire](#glossaire-projet)** : tout terme inconnu au fil de la lecture.  
