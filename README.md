@@ -2,11 +2,256 @@
 
 Projet académique de groupe — Réseaux de neurones artificiels (RNA).
 
+**Navigation rapide :** [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
+
 **État du dépôt :** documentation et données brutes présentes ; le code applicatif (`energy_forecast/`, scripts, notebooks) est à produire selon ce guide. Ce fichier sert de référence unique pour cadrer le travail, les livrables et l’ordre d’exécution.
 
 ---
 
+<a id="guide-debut"></a>
+## Par où commencer (lecture obligatoire)
+
+**Si tu arrives sur le projet sans contexte technique :** lis dans cet ordre : [Recette du projet](#recette-projet) (fil d’A à Z) → [Glossaire](#glossaire-projet) (mots inconnus) → [Mathématiques](#maths-projet) (formules alignées avec le code) → puis [1. Objectif](#1-objectif-et-question-de-recherche) et la suite.
+
+**Si tu es assigné à un module précis :** ouvre d’abord [11. Répartition équipe](#11-répartition-équipe-et-jalons), repère ton module (A/B/C/D), puis suis uniquement les **étapes de la recette** qui concernent ce module ; reviens au glossaire et aux maths quand un terme bloque.
+
+**Première action concrète (jour 1) :** vérifier que le fichier `Hourly Energy Consumption/PJME_hourly.csv` est présent ; installer Python 3.10+ ; créer l’environnement virtuel et `requirements.txt` quand le dépôt de code sera initialisé ; ouvrir un notebook vide pour l’EDA et noter la plage de dates réelle après `read_csv`.
+
+**Critère « on a démarré correctement » :** une personne de l’équipe peut expliquer en une phrase ce qu’est une fenêtre **168 → 24**, pourquoi le découpage est **chronologique**, et pourquoi le **Min-Max** se calcule sur le **train seulement**.
+
+---
+
+<a id="recette-projet"></a>
+## Recette du projet — de zéro au livrable final
+
+Analogie : le **plat final** = rapport HTML + table `metrics.csv` + graphiques + 3 modèles entraînés comparés (LSTM, Bi-LSTM, LSTM+Attention) + interprétation des poids d’attention. Les **ingrédients** = données PJME, Python, librairies listées plus bas. Les **ustensiles** = notebooks + dossier `src/` + `config.yaml`.
+
+| # | Étape (à faire dans l’ordre) | Tu obtiens quoi ? | Où c’est détaillé dans ce README |
+|---|------------------------------|-------------------|----------------------------------|
+| 0 | Installer Python, Git ; créer `venv` ; préparer `requirements.txt` | machine prête | [12. Environnement](#12-environnement-et-exécution) |
+| 1 | Créer l’arborescence `energy_forecast/` (dossiers `data`, `src`, `notebooks`, `results`) | structure du code | [3. Structure cible](#3-structure-cible-du-projet) |
+| 2 | Copier `PJME_hourly.csv` dans `data/raw/` (depuis `Hourly Energy Consumption/` si besoin) | chemin unique pour les scripts | [2. Données](#2-données) |
+| 3 | Notebook EDA : série complète, saisonnalité, anomalies | décisions de nettoyage documentées | [2.4](#24-qualité-des-données), module A |
+| 4 | Charger, trier par temps ; créer features calendaires + `is_holiday` | tableau enrichi | [5. Prétraitement](#5-prétraitement-et-feature-engineering) |
+| 5 | Découper **dans le temps** 80 % / 10 % / 10 % (sans mélanger aléatoirement tout le jeu) | bornes train / val / test | [6.2](#62-split-chronologique-80--10--10-) |
+| 6 | Calculer Min-Max **sur le train** ; appliquer au val et test | pas de fuite d’information | [5.3](#53-normalisation-min-max-cible-mw), [Maths M1](#maths-projet) |
+| 7 | Construire fenêtres : entrée **168** pas, sortie **24** pas | tenseurs `(N, 168, F)` et `(N, 24)` | [6.1](#61-fenêtre-et-horizon) |
+| 8 | Implémenter les 3 modèles PyTorch + test sur batch aléatoire | `models.py` validé | [7. Les trois modèles](#7-les-trois-modèles) |
+| 9 | Entraîner chaque modèle (Adam, scheduler, early stopping, checkpoints) | fichiers `.pth` + logs | [8. Entraînement](#8-entraînement-et-critères-de-qualité) |
+| 10 | Évaluer sur le **test** en MW (dénormaliser) ; MAE, RMSE, MAPE | `metrics.csv` | [9. Évaluation](#9-évaluation-visualisations-et-tests-statistiques) |
+| 11 | Figures : réel vs prédit, losses, heatmap attention, tableau comparatif | dossier `results/plots/` | idem |
+| 12 | Test de Diebold–Mariano entre modèles | phrase « significatif ou non » appuyée sur un test | [9.3](#93-test-de-dieboldmariano) |
+| 13 | Générer `report.html` (résumé + hyperparamètres + figures) | livrable lisible par l’encadrant | [10. Rapport HTML](#10-rapport-html-et-synthèse) |
+
+**Règle de recette :** ne pas passer à l’étape *n* + 1 si l’étape *n* n’a pas de sortie vérifiable (fichier, graphique ou métrique) partagée avec l’équipe.
+
+---
+
+<a id="glossaire-projet"></a>
+## Glossaire des termes
+
+Les définitions ci-dessous sont celles **utilisées dans ce projet** ; elles peuvent différer légèrement du vocabulaire d’un autre cours.
+
+| Terme | Signification courte |
+|--------|----------------------|
+| **PJM / PJME** | Marché / zone de transport d’électricité aux États-Unis ; **PJME** = sous-zone « East », fichier `PJME_hourly.csv`. |
+| **MW** | Mégawatt, unité de puissance ; la colonne `PJME_MW` est la charge observée à l’instant *t*. |
+| **Série temporelle** | Suite de valeurs indexées par le temps (ici une mesure par heure). |
+| **Feature engineering** | Créer des colonnes explicatives à partir des dates (heure, mois, week-end, férié, etc.). |
+| **Covariable** | Entrée du modèle en plus de la consommation (souvent les features calendaires). |
+| **Normalisation Min-Max** | Transformer les nombres dans un intervalle (souvent [0, 1]) pour stabiliser l’entraînement ; voir formules en [Mathématiques](#maths-projet). |
+| **Fuite d’information (*data leakage*)** | Utiliser une information du **futur** ou du **test** pour construire le train (ex. Min-Max calculé sur tout le jeu) ; les scores deviennent irréalistes. |
+| **Fenêtre glissante** | Tranche de **168** heures consécutives utilisée comme entrée ; on la fait « glisser » d’une ligne à l’autre le long du temps. |
+| **Horizon de prédiction** | Nombre d’instants futurs prédits ici : **24** heures après la fin de la fenêtre d’entrée (convention exacte à figer dans le code). |
+| **Train / validation / test** | **Train** = apprentissage des poids ; **validation** = choix early stopping et suivi de la généralisation pendant l’entraînement ; **test** = mesure finale **une fois** le modèle figé. |
+| **Split chronologique** | Couper le temps en blocs successifs (passé → futur), sans tirage aléatoire des lignes, pour respecter la causalité. |
+| **RNA / deep learning** | Réseau de neurones ; « profond » = plusieurs couches traitant les données. |
+| **PyTorch** | Bibliothèque Python pour définir et entraîner les réseaux (tenseurs, `nn.Module`, etc.). |
+| **Tenseur** | Tableau multidimensionnel généralisant matrice et vecteur ; ex. `(batch, 168, features)`. |
+| **LSTM** | Type de couche récurrente qui garde une **mémoire** sur plusieurs pas de temps ; adaptée aux séries longues. |
+| **État caché** | Vecteur résumant l’information du passé récent à l’instant *t* dans la LSTM. |
+| **Bi-LSTM** | Deux LSTM, une lecture **chronologique** et une **anti-chronologique** ; leurs sorties sont concaténées. |
+| **Attention (Bahdanau)** | Mécanisme qui calcule des **poids** sur chaque pas du passé pour construire un **vecteur de contexte** ; permet de visualiser « quelles heures comptent ». |
+| **Softmax** | Fonction qui transforme des scores en **probabilités** (somme = 1) ; utilisée pour les poids d’attention. |
+| **Dropout** | Désactivation aléatoire de neurones pendant l’entraînement pour limiter le surapprentissage. |
+| **Batch** | Sous-groupe d’échantillons traité ensemble (ex. 32 fenêtres) à chaque mise à jour partielle. |
+| **Époque (*epoch*)** | Un passage complet sur l’ensemble d’entraînement. |
+| **Loss** | Fonction d’erreur à minimiser (souvent MSE entre prédictions et vérité sur le train). |
+| **Adam** | Algorithme d’optimisation des poids (variante de descente de gradient). |
+| **Learning rate** | Pas de mise à jour des poids ; ici typiquement 0.001 au départ. |
+| **ReduceLROnPlateau** | Stratégie qui **diminue** le learning rate quand la validation stagne. |
+| **Early stopping** | Arrêter l’entraînement si la validation ne s’améliore plus pendant *patience* époques (évite de trop surapprendre). |
+| **Checkpoint** | Fichier `.pth` sauvegardant les poids du meilleur modèle sur la validation. |
+| **MAE / RMSE / MAPE** | Trois façons de mesurer l’erreur entre vérité et prédiction (voir [Mathématiques](#maths-projet)). |
+| **Diebold–Mariano** | Test statistique pour comparer deux séries d’erreurs de prévision ; indique si une différence de performance est **compatible avec le hasard** ou non. |
+| **EDA** | *Exploratory Data Analysis* : exploration visuelle et statistique avant modélisation. |
+| **Heatmap** | Image où une couleur représente l’intensité (ici les poids d’attention sur 168 heures). |
+
+---
+
+<a id="maths-projet"></a>
+## Mathématiques utilisées dans ce projet
+
+Les formules sont écrites en **LaTeX** (affichage correct sur GitHub, VS Code avec aperçu math, et export PDF depuis plusieurs outils).
+
+### Symboles et conventions (à utiliser partout dans le rapport)
+
+| Symbole | Nom | Signification dans ce projet |
+|:-------:|-----|------------------------------|
+| $x_t$ | entrée au pas $t$ | vecteur des variables à l’heure $t$ (MW normalisé + features) |
+| $y$, $\hat{y}$ | cible, prédiction | $\hat{y}$ se lit « y chapeau » ; valeurs sur l’horizon 24 h |
+| $\sigma(\cdot)$ | sigmoïde | $\sigma(z) = \frac{1}{1 + e^{-z}}$ ; sortie dans $]0,\,1[$ |
+| $\tanh(\cdot)$ | tangente hyperbolique | sortie dans $]-1,\,1[$ |
+| $\odot$ | produit de Hadamard | multiplication **élément par élément** de deux vecteurs de même taille |
+| $[\,h_{t-1}\,;\,x_t\,]$ | concaténation verticale | vecteur obtenu en empilant $h_{t-1}$ et $x_t$ (notée aussi $[h_{t-1}, x_t]$ selon les auteurs) |
+| $W$, $b$ | poids et biais | matrices / vecteurs appris ; le produit $W\,[\,h_{t-1}\,;\,x_t\,] + b$ est un **produit matrice–vecteur** |
+| $h_t$, $C_t$ | état caché, état cellule | sortie « visible » et mémoire interne de la LSTM |
+| $\mathbf{v}^{\top}$ | transposée | ligne vectorielle ; $\mathbf{v}^{\top}\mathbf{u}$ est un scalaire (produit scalaire) |
+| $\sum$, $\prod$ | somme, produit | agrégations sur les pas de temps ou les instants du test |
+| $\|\cdot\|$ ou $\lvert \cdot \rvert$ | valeur absolue | pour MAE et MAPE sur des scalaires |
+
+---
+
+### M1 — Normalisation Min-Max (paramètres estimés sur le **train** uniquement)
+
+Soit $x \in \mathbb{R}$ une valeur brute (ex. MW). Soient $x_{\min}$ et $x_{\max}$ le minimum et le maximum observés **sur le jeu d’entraînement** :
+
+$$
+x_{\mathrm{norm}} \;=\; \frac{x - x_{\min}}{x_{\max} - x_{\min}}
+$$
+
+**Dénormalisation** (revenir en MW) :
+
+$$
+x \;=\; x_{\min} + x_{\mathrm{norm}} \cdot \bigl(x_{\max} - x_{\min}\bigr)
+$$
+
+---
+
+### M2 — Fonction de coût d’entraînement (régression sur 24 pas)
+
+**MSE** (erreur quadratique moyenne) sur l’horizon $H=24$ pour un échantillon :
+
+$$
+\mathcal{L}_{\mathrm{MSE}} \;=\; \frac{1}{H}\sum_{h=1}^{H} \bigl( y_h - \hat{y}_h \bigr)^{2} \;=\; \frac{1}{24}\sum_{h=1}^{24} \bigl( y_h - \hat{y}_h \bigr)^{2}
+$$
+
+Sur un mini-batch de taille $B$, on moyenne en général sur le batch : $\displaystyle \mathcal{L} = \frac{1}{B}\sum_{b=1}^{B} \mathcal{L}_{\mathrm{MSE}}^{(b)}$.
+
+**Alternative L1** (MAE comme loss) : $\displaystyle \mathcal{L}_{\mathrm{L1}} = \frac{1}{24}\sum_{h=1}^{24} \bigl\lvert y_h - \hat{y}_h \bigr\rvert$ — à garder **identique** pour les trois modèles si l’on compare les losses.
+
+---
+
+### M3 — Cellule LSTM (quatre portes + états)
+
+À l’instant $t$, entrée $x_t$, états précédents $h_{t-1}$ et $C_{t-1}$. On note $z_t = [\,h_{t-1}\,;\,x_t\,]$ le vecteur concaténé. Les poids $W_f, W_i, W_C, W_o$ et biais $b_f, b_i, b_C, b_o$ sont les paramètres appris.
+
+**Porte d’oubli** (oublie une partie de la mémoire passée) :
+
+$$
+f_t \;=\; \sigma\!\bigl( W_f\, z_t + b_f \bigr)
+$$
+
+**Porte d’entrée** (filtre ce qui entre dans la cellule) :
+
+$$
+i_t \;=\; \sigma\!\bigl( W_i\, z_t + b_i \bigr)
+$$
+
+**Candidat** (nouvelle information proposée) :
+
+$$
+\tilde{C}_t \;=\; \tanh\!\bigl( W_C\, z_t + b_C \bigr)
+$$
+
+**État de la cellule** (mémoire mise à jour) :
+
+$$
+C_t \;=\; f_t \odot C_{t-1} \;+\; i_t \odot \tilde{C}_t
+$$
+
+**Porte de sortie** :
+
+$$
+o_t \;=\; \sigma\!\bigl( W_o\, z_t + b_o \bigr)
+$$
+
+**Sortie cachée** (ce qui est transmis aux couches suivantes) :
+
+$$
+h_t \;=\; o_t \odot \tanh(C_t)
+$$
+
+Dans PyTorch, `nn.LSTM` implémente ces relations ; les notations $W_f,\ldots$ correspondent à des blocs regroupés dans les matrices internes du module.
+
+---
+
+### M4 — Attention additive de Bahdanau (scores, softmax, contexte)
+
+Soit $h_s \in \mathbb{R}^{d_h}$ la sortie cachée de la LSTM au pas $s$, avec $s \in \{1,\ldots,T\}$ et $T=168$. Soit $\mathbf{q}_t \in \mathbb{R}^{d_q}$ un vecteur **requête** (souvent $\mathbf{q}_t = h_T$ ou une couche linéaire appliquée à $h_T$). Soient $\mathbf{W}_h$, $\mathbf{W}_q$, $\mathbf{v}$ des paramètres appris (dimensions compatibles).
+
+**Scores d’alignement** (un scalaire par couple $(t,s)$) :
+
+$$
+e_{t,s} \;=\; \mathbf{v}^{\top}\,\tanh\!\bigl( \mathbf{W}_h\, h_s + \mathbf{W}_q\, \mathbf{q}_t \bigr)
+$$
+
+**Poids d’attention** (softmax sur $s$, donc $\sum_{s=1}^{T}\alpha_{t,s}=1$ et $\alpha_{t,s} \ge 0$) :
+
+$$
+\alpha_{t,s} \;=\; \frac{\exp\!\bigl(e_{t,s}\bigr)}{\displaystyle\sum_{k=1}^{T} \exp\!\bigl(e_{t,k}\bigr)}
+$$
+
+**Vecteur de contexte** (barycentre des $h_s$ pondéré par les $\alpha_{t,s}$) :
+
+$$
+\mathbf{c}_t \;=\; \sum_{s=1}^{T} \alpha_{t,s}\, h_s
+$$
+
+Les $\alpha_{t,s}$ se visualisent en **heatmap** sur les $T=168$ heures.
+
+---
+
+### M5 — Métriques sur le jeu de test (après dénormalisation en MW)
+
+Soit $n$ le nombre de points évalués, $y_i$ la valeur observée, $\hat{y}_i$ la prédiction (toutes deux en **MW**).
+
+**MAE** — erreur absolue moyenne :
+
+$$
+\mathrm{MAE} \;=\; \frac{1}{n}\sum_{i=1}^{n} \bigl\lvert y_i - \hat{y}_i \bigr\rvert
+$$
+
+**RMSE** — racine de l’erreur quadratique moyenne :
+
+$$
+\mathrm{RMSE} \;=\; \sqrt{\,\frac{1}{n}\sum_{i=1}^{n} \bigl( y_i - \hat{y}_i \bigr)^{2}\,}
+$$
+
+**MAPE** — erreur relative moyenne en pourcentage :
+
+$$
+\mathrm{MAPE} \;=\; \frac{100}{n}\sum_{i=1}^{n} \left\lvert \frac{y_i - \hat{y}_i}{y_i} \right\rvert \;\;(\%)
+$$
+
+---
+
+### M6 — Test de Diebold–Mariano (idée)
+
+Pour chaque instant $i$, on définit une perte de prévision $L_i^{A}$ et $L_i^{B}$ (ex. $L_i = (y_i - \hat{y}_i)^2$ ou $L_i = \lvert y_i - \hat{y}_i\rvert$). La **différence de performance** instantanée est :
+
+$$
+d_i \;=\; L_i^{A} - L_i^{B}
+$$
+
+Le test étudie si la moyenne des $d_i$ est **significativement** différente de $0$ (sous des hypothèses de stationnarité faible des $d_i$). L’implémentation (statistique, p-valeur) passe par une bibliothèque ou un code documenté ; il faut **fixer** la définition de $L_i$ dans le rapport.
+
+---
+
+<a id="table-des-matieres"></a>
 ## Table des matières
+
+**Guide de lecture** : [Par où commencer](#guide-debut) · [Recette](#recette-projet) · [Glossaire](#glossaire-projet) · [Mathématiques](#maths-projet)
 
 1. [Objectif et question de recherche](#1-objectif-et-question-de-recherche)  
 2. [Données](#2-données)  
@@ -154,13 +399,13 @@ La cible principale reste `PJME_MW` ; les autres colonnes servent de **covariabl
 
 ### 5.3 Normalisation Min-Max (cible MW)
 
-Pour la série de consommation (et éventuellement d’autres features continues si l’équipe décide de les mettre à la même échelle) :
+Pour la série de consommation (et éventuellement d’autres features continues si l’équipe décide de les mettre à la même échelle), même formule que **[M1](#maths-projet)** :
 
-\[
-x_{\text{norm}} = \frac{x - x_{\min}}{x_{\max} - x_{\min}}
-\]
+$$
+x_{\mathrm{norm}} \;=\; \frac{x - x_{\min}}{x_{\max} - x_{\min}}
+$$
 
-Les valeurs \(x_{\min}\) et \(x_{\max}\) sont calculées **sur le sous-ensemble train uniquement**, puis appliquées au validation et au test. Sauvegarder le scaler (pickle ou attributs dans un fichier) pour dénormaliser les prédictions avant les métriques en MW.
+Les valeurs $x_{\min}$ et $x_{\max}$ sont calculées **sur le sous-ensemble train uniquement**, puis appliquées au validation et au test. Sauvegarder le scaler (pickle ou attributs dans un fichier) pour dénormaliser les prédictions avant les métriques en MW.
 
 ---
 
@@ -218,17 +463,25 @@ Framework : **PyTorch**. Toutes les architectures partagent les mêmes dimension
   - un **vecteur de contexte** utilisé pour la régression ;  
   - les **poids d’attention** \(\alpha\) pour visualisation (heatmap sur les 168 pas).
 
-Équations de référence (notation compacte) :
+Équations de référence (forme compacte ; développement complet et symboles : **[M4](#maths-projet)**) :
 
-- Score : \(e_{t,s} = v^\top \tanh(W_h h_s + W_q q_t)\)  
-- Poids : \(\alpha_{t,s} = \frac{\exp(e_{t,s})}{\sum_k \exp(e_{t,k})}\)  
-- Contexte : \(c_t = \sum_s \alpha_{t,s} h_s\)
+$$
+e_{t,s} \;=\; \mathbf{v}^{\top}\,\tanh\!\bigl(\mathbf{W}_h\, h_s + \mathbf{W}_q\,\mathbf{q}_t\bigr)
+$$
 
-Le vecteur requête \(q_t\) est à définir dans l’implémentation (souvent le dernier état caché ou une projection de celui-ci) ; **une fois choisi, ne pas changer entre runs comparatifs** sans le noter.
+$$
+\alpha_{t,s} \;=\; \frac{\exp\!\bigl(e_{t,s}\bigr)}{\displaystyle\sum_{k=1}^{T} \exp\!\bigl(e_{t,k}\bigr)}
+$$
 
-### 7.4 Rappel LSTM (rédaction cours)
+$$
+\mathbf{c}_t \;=\; \sum_{s=1}^{T} \alpha_{t,s}\, h_s
+$$
 
-Portes : oubli \(f_t\), entrée \(i_t\), candidat \(\tilde{C}_t\), sortie \(o_t\), état cellule \(C_t\), état caché \(h_t\), avec \(\sigma\) sigmoïde et \(\odot\) produit terme à terme. Les détails complets sont laissés au support de cours ; le code utilisera `nn.LSTM`.
+Le vecteur requête $\mathbf{q}_t$ est à définir dans l’implémentation (souvent le dernier état caché $h_T$ ou une projection de celui-ci) ; **une fois choisi, ne pas changer entre runs comparatifs** sans le noter.
+
+### 7.4 Rappel LSTM (lien avec les mathématiques)
+
+Les équations des portes (oubli, entrée, candidat, cellule, sortie) et l’attention Bahdanau sont regroupées dans **[Mathématiques utilisées dans ce projet](#maths-projet)** (repères **M3** et **M4**). Le code utilisera `nn.LSTM` ; la compréhension des portes sert surtout au rapport et à l’oral.
 
 ---
 
@@ -267,9 +520,21 @@ Toutes les métriques sur le **test** sont calculées **après dénormalisation*
 
 ### 9.1 Métriques
 
-- **MAE** : \(\frac{1}{n} \sum_i |y_i - \hat{y}_i|\)  
-- **RMSE** : \(\sqrt{\frac{1}{n} \sum_i (y_i - \hat{y}_i)^2}\)  
-- **MAPE** : \(\frac{100\%}{n} \sum_i \left| \frac{y_i - \hat{y}_i}{y_i} \right|\) — attention aux \(y_i\) proches de zéro (non le cas ici en MW, mais garder la formule défensive si réutilisation).
+Même définitions que **[M5](#maths-projet)** (après dénormalisation en MW) :
+
+$$
+\mathrm{MAE} \;=\; \frac{1}{n}\sum_{i=1}^{n} \bigl\lvert y_i - \hat{y}_i \bigr\rvert
+$$
+
+$$
+\mathrm{RMSE} \;=\; \sqrt{\,\frac{1}{n}\sum_{i=1}^{n} \bigl( y_i - \hat{y}_i \bigr)^{2}\,}
+$$
+
+$$
+\mathrm{MAPE} \;=\; \frac{100}{n}\sum_{i=1}^{n} \left\lvert \frac{y_i - \hat{y}_i}{y_i} \right\rvert \quad (\%)
+$$
+
+Attention aux $y_i$ très proches de $0$ dans d’autres jeux de données ; ici les MW restent loin de zéro.
 
 ### 9.2 Graphiques minimum
 
@@ -399,10 +664,24 @@ Les arguments exacts (`--model`, chemins, device) sont à harmoniser dans `train
 
 ## Annexe — Ordre de lecture pour un nouveau membre
 
-1. Lire les sections **1**, **2**, **4** et **6** (cadrage + données + pipeline + fenêtres).  
-2. Parcourir **11** pour voir où son module s’insère.  
-3. Lire **7** et **8** en détail si responsable modèles ou entraînement.  
-4. Lire **9** et **10** si responsable évaluation et livrable final.  
-5. Garder **13** sous les yeux pendant toute l’implémentation.
+1. **[Recette](#recette-projet)** : vision d’ensemble en une table (étapes 0 à 13).  
+2. **[Glossaire](#glossaire-projet)** : tout terme inconnu au fil de la lecture.  
+3. **[Mathématiques](#maths-projet)** : formules alignées avec le rapport et les slides.  
+4. Sections **1**, **2**, **4** et **6** : cadrage, données, pipeline, fenêtres et split.  
+5. Section **11** : rôle de chaque membre (modules A–D).  
+6. Sections **7** et **8** si modèles ou entraînement ; **9** et **10** si évaluation et rapport HTML.  
+7. Section **13** à garder ouverte pendant le codage (fuites d’information, shuffle, etc.).
+
+### Ce que ce README couvre (complétude)
+
+| Zone du projet | Couvert ? | Où ? |
+|----------------|-----------|------|
+| Données, fichier, qualité | Oui | §2, recette étapes 2–3 |
+| Features, normalisation, fenêtres, split | Oui | §5–6, maths M1 |
+| Trois architectures PyTorch | Oui | §7, maths M3–M4 |
+| Entraînement (Adam, scheduler, early stopping) | Oui | §8, maths M2 |
+| Métriques, figures, attention, DM, HTML | Oui | §9–10, maths M5–M6 |
+| Rôles équipe et jalons | Oui | §11 |
+| **Code source exécutable** | Non (stand-by) | À produire dans `energy_forecast/src/` selon la recette |
 
 Ce document peut être complété au fil du projet (chemins d’exécution définitifs, figures clés, résultats numériques obtenus). Toute modification de convention (nom des colonnes, loss, agrégation LSTM) doit être **tracée ici ou dans `config.yaml`** pour rester le contrat d’équipe unique.
