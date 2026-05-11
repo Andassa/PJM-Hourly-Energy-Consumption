@@ -2,7 +2,7 @@
 
 Projet académique de groupe en réseaux de neurones artificiels (RNA).
 
-**Navigation rapide :** [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
+**Navigation rapide :** [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
 
 **État du dépôt :** documentation et données brutes présentes ; le code applicatif (`energy_forecast/`, scripts, notebooks) est à produire selon ce guide. Ce fichier sert de référence unique pour cadrer le travail, les livrables et l’ordre d’exécution.
 
@@ -11,7 +11,7 @@ Projet académique de groupe en réseaux de neurones artificiels (RNA).
 <a id="guide-debut"></a>
 ## Par où commencer (lecture obligatoire)
 
-**Si tu arrives sur le projet sans contexte technique :** lis dans cet ordre : [Recette du projet](#recette-projet) (fil d’A à Z) → [Glossaire](#glossaire-projet) (mots inconnus) → [Mathématiques](#maths-projet) (formules alignées avec le code) → puis [1. Objectif](#1-objectif-et-question-de-recherche) et la suite.
+**Si tu arrives sur le projet sans contexte technique :** lis dans cet ordre : [Recette du projet](#recette-projet) (fil d’A à Z) → [Glossaire](#glossaire-projet) (table mémo) → [Jargon expliqué en détail](#jargon-detail) (LSTM, Bi-LSTM, attention, PyTorch, métriques, fichiers) → [Mathématiques](#maths-projet) (formules) → puis [1. Objectif](#1-objectif-et-question-de-recherche) et la suite.
 
 **Si tu es assigné à un module précis :** ouvre d’abord [11. Répartition équipe](#11-répartition-équipe-et-jalons), repère ton module (A/B/C/D), puis suis uniquement les **étapes de la recette** qui concernent ce module ; reviens au glossaire et aux maths quand un terme bloque.
 
@@ -86,6 +86,88 @@ Les définitions ci-dessous sont celles **utilisées dans ce projet** ; elles pe
 | **Diebold–Mariano** | Test statistique pour comparer deux séries d’erreurs de prévision ; indique si une différence de performance est **compatible avec le hasard** ou non. |
 | **EDA** | *Exploratory Data Analysis* : exploration visuelle et statistique avant modélisation. |
 | **Heatmap** | Image où une couleur représente l’intensité (ici les poids d’attention sur 168 heures). |
+
+Le tableau ci-dessus sert de **mémo**. Les sous-sections suivantes expliquent le **jargon** comme dans un cours : à lire au moins une fois au début du projet, puis en retour lors de la rédaction du rapport.
+
+<a id="jargon-detail"></a>
+### Acronymes et sigles (liste rapide)
+
+| Sigle | Écriture complète | Rôle dans ce projet |
+|--------|-------------------|---------------------|
+| **RNA** | Réseau de neurones artificiels | Famille de modèles ; ici on utilise des RNA **récurrents** profonds. |
+| **LSTM** | *Long Short-Term Memory* (mémoire court et long terme) | Couche qui traite une **séquence** heure par heure en gardant une mémoire interne. |
+| **Bi-LSTM** | LSTM **bidirectionnelle** | Deux sens de lecture de la séquence ; le nom **Bi** vient de *bi* = deux. |
+| **MW** | Mégawatt | Unité de la colonne de charge `PJME_MW`. |
+| **MSE** | *Mean Squared Error* (erreur quadratique moyenne) | Loss d’entraînement classique pour la régression (voir [M2](#maths-projet)). |
+| **MAE** | *Mean Absolute Error* | Métrique d’évaluation : erreur moyenne en valeur absolue, en MW après dénormalisation. |
+| **RMSE** | *Root Mean Squared Error* | Métrique : racine de l’erreur quadratique moyenne ; pénalise fort les grosses erreurs. |
+| **MAPE** | *Mean Absolute Percentage Error* | Erreur relative moyenne en % ; utile pour comparer à l’échelle relative. |
+| **EDA** | *Exploratory Data Analysis* | Phase d’exploration des données avant modélisation. |
+| **DM** | Test de Diebold-Mariano | Test statistique pour comparer deux modèles de prévision. |
+| **GPU / CPU** | Processeur graphique / central | Le GPU accélère PyTorch si disponible ; le CPU suffit pour des tests plus lents. |
+
+### Réseau récurrent, LSTM, Bi-LSTM : qu’est-ce que c’est ?
+
+**RNN (*recurrent neural network*)**  
+Un réseau « normal » (perceptron) traite une entrée fixe. Un **récurrent** traite une **séquence** : à chaque heure \(t\), il reçoit une entrée \(x_t\) et un **résumé du passé** (l’état caché). Il met à jour ce résumé et peut, à la fin, produire une prédiction. Problème classique des RNN simples : la mémoire **s’efface** sur de longues séries (gradient qui disparaît en apprentissage). La **LSTM** a été conçue pour mieux garder l’information sur de longues plages.
+
+**LSTM (*Long Short-Term Memory*)**  
+C’est un bloc de calcul avec des **portes** (oubli, entrée, sortie) et un **état cellule** séparé de l’**état caché**. Intuition : la cellule peut **stocker** une tendance (ex. saison, niveau de charge) pendant plusieurs pas, ou **l’oublier** si la porte d’oubli le décide, ce qui rend le modèle plus stable sur 168 heures d’historique. Dans ce projet, une ou **deux** couches LSTM empilées lisent la fenêtre de 168 pas et alimentent une **tête de régression** (couches linéaires) qui sort **24** valeurs futures.
+
+**Bi-LSTM (*bidirectional LSTM*)**  
+On fait tourner **une** LSTM du passé vers le futur et **une autre** du futur vers le passé **sur la même fenêtre d’entrée**. Les deux sorties sont **concaténées**. Intuition : le modèle peut croiser « ce qui ressemble à une montée vue depuis la gauche » et « vue depuis la droite ». Attention : tout reste **dans la fenêtre passée** (les 168 heures avant l’instant de prédiction) ; on ne regarde pas le futur **réel** à prédire. À expliquer clairement dans le rapport pour éviter la confusion avec une fuite de données.
+
+**Attention de Bahdanau**  
+Après la LSTM, on dispose d’un vecteur \(h_s\) par heure \(s\) de la fenêtre. L’**attention** calcule un **poids** \(\alpha_{t,s}\) par heure : les heures importantes pour la prédiction reçoivent un poids plus grand. Le **vecteur de contexte** est une moyenne pondérée des \(h_s\). Intuition : le modèle **choisit** quels moments du passé regarder (pics, veille de jour férié, etc.), au lieu de résumer toute la semaine seulement par le dernier état caché. Les \(\alpha_{t,s}\) se **visualisent** en heatmap.
+
+### Vocabulaire entraînement et évaluation
+
+**PyTorch**  
+Bibliothèque qui représente les données en **tenseurs**, les opérations en graphe de calcul, et la **dérivée automatique** (*autograd*) pour ajuster les poids par **descente de gradient**. On définit un modèle en sous-classant `nn.Module`, on envoie des batchs sur `model(x)`, on calcule la loss, puis `loss.backward()` et `optimizer.step()`.
+
+**Tenseur**  
+Généralisation d’un vecteur ou d’une matrice à plusieurs dimensions. Ici des formes du type `(taille_batch, 168, nombre_de_features)`.
+
+**Loss (*loss function*, fonction de coût)**  
+Nombre que le réseau doit **minimiser**. Ici c’est typiquement la **MSE** entre les 24 valeurs prédites et les 24 vraies valeurs (sur le train). La loss sur le **validation** sert à l’**early stopping** et au **ReduceLROnPlateau**, pas à mettre à jour les poids directement.
+
+**Batch**  
+Le jeu d’entraînement est découpé en **lots** (par ex. 32 fenêtres). Une **mise à jour** des poids utilise un batch ; une **époque** a parcouru tous les batchs du train une fois.
+
+**Adam**  
+Méthode d’optimisation qui adapte le pas d’apprentissage par paramètre ; pratique par défaut en deep learning. Le **learning rate** est le pas global (souvent 0.001 au début).
+
+**Early stopping**  
+Si la loss de **validation** ne baisse plus pendant plusieurs époques (**patience**), on **arrête** pour ne pas surapprendre le train. On garde le **meilleur jeu de poids** vu sur la validation (**checkpoint** `.pth`).
+
+**Surapprentissage (*overfitting*)**  
+Le modèle mémorise le train et mal généralise. Le **dropout** et l’early stopping en limitent les effets.
+
+**MinMaxScaler (scikit-learn)**  
+Implémentation standard de la normalisation Min-Max du projet. On appelle `fit` sur le **train** seulement, puis `transform` sur val et test.
+
+**Checkpoint `.pth`**  
+Fichier binaire PyTorch qui sauvegarde les **poids** du réseau (et parfois l’état de l’optimiseur). Permet de recharger le meilleur modèle sans réentraîner.
+
+### Données, fichiers et reste du pipeline
+
+**Kaggle**  
+Plateforme où se trouve le jeu *PJM Hourly Energy Consumption* ; le fichier utilisé ici est `PJME_hourly.csv`.
+
+**CSV**  
+Fichier texte tabulaire (séparateur virgule) ; `Datetime` et `PJME_MW` sont les deux colonnes principales.
+
+**Pickle (`.pkl`)**  
+Format Python pour sérialiser des objets (par ex. tenseurs ou DataFrames déjà fenêtrés). Les fichiers `train.pkl` / `val.pkl` / `test.pkl` accélèrent les relances d’entraînement.
+
+**Fenêtre 168 et horizon 24**  
+**168** = 7 jours × 24 h, une **semaine** d’historique comme entrée. **24** = nombre d’heures **futures** à prédire en sortie du réseau (multi-horizon court).
+
+**Split chronologique 80 / 10 / 10**  
+Les **premiers** instants dans le temps servent au train, la **tranche suivante** à la validation, la **dernière** au test. On ne tire pas les lignes au hasard, pour ne pas mélanger futur et passé.
+
+**Rapport HTML**  
+Page web unique qui regroupe texte, tableaux et images (`report.html`) pour présenter résultats et figures à l’encadrant sans ouvrir dix fichiers séparés.
 
 ---
 
@@ -251,7 +333,7 @@ Le test étudie si la moyenne des $d_i$ est **significativement** différente de
 <a id="table-des-matieres"></a>
 ## Table des matières
 
-**Guide de lecture** : [Par où commencer](#guide-debut) · [Recette](#recette-projet) · [Glossaire](#glossaire-projet) · [Mathématiques](#maths-projet)
+**Guide de lecture** : [Par où commencer](#guide-debut) · [Recette](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet)
 
 1. [Objectif et question de recherche](#1-objectif-et-question-de-recherche)  
 2. [Données](#2-données)  
@@ -665,17 +747,19 @@ Les arguments exacts (`--model`, chemins, device) sont à harmoniser dans `train
 ## Annexe : Ordre de lecture pour un nouveau membre
 
 1. **[Recette](#recette-projet)** : vision d’ensemble en une table (étapes 0 à 13).  
-2. **[Glossaire](#glossaire-projet)** : tout terme inconnu au fil de la lecture.  
-3. **[Mathématiques](#maths-projet)** : formules alignées avec le rapport et les slides.  
-4. Sections **1**, **2**, **4** et **6** : cadrage, données, pipeline, fenêtres et split.  
-5. Section **11** : rôle de chaque membre (modules A–D).  
-6. Sections **7** et **8** si modèles ou entraînement ; **9** et **10** si évaluation et rapport HTML.  
-7. Section **13** à garder ouverte pendant le codage (fuites d’information, shuffle, etc.).
+2. **[Glossaire](#glossaire-projet)** : définitions en une ligne (mémo).  
+3. **[Jargon détaillé](#jargon-detail)** : LSTM, Bi-LSTM, attention, PyTorch, loss, batch, fichiers, etc.  
+4. **[Mathématiques](#maths-projet)** : formules alignées avec le rapport et les slides.  
+5. Sections **1**, **2**, **4** et **6** : cadrage, données, pipeline, fenêtres et split.  
+6. Section **11** : rôle de chaque membre (modules A–D).  
+7. Sections **7** et **8** si modèles ou entraînement ; **9** et **10** si évaluation et rapport HTML.  
+8. Section **13** à garder ouverte pendant le codage (fuites d’information, shuffle, etc.).
 
 ### Ce que ce README couvre (complétude)
 
 | Zone du projet | Couvert ? | Où ? |
 |----------------|-----------|------|
+| Jargon (LSTM, métriques, pipeline) | Oui | [Glossaire](#glossaire-projet) + [Jargon détaillé](#jargon-detail) |
 | Données, fichier, qualité | Oui | §2, recette étapes 2–3 |
 | Features, normalisation, fenêtres, split | Oui | §5–6, maths M1 |
 | Trois architectures PyTorch | Oui | §7, maths M3–M4 |
