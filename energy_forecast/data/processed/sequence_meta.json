@@ -1,0 +1,67 @@
+{
+  "input_len": 168,
+  "horizon": 24,
+  "train_ratio": 0.8,
+  "val_ratio": 0.1,
+  "target_col": "PJME_MW",
+  "feature_cols": [
+    "PJME_MW",
+    "dow",
+    "hour",
+    "is_holiday",
+    "is_weekend",
+    "month"
+  ],
+  "source_csv": "C:\\Users\\fanomezantsoa\\Desktop\\PJM Hourly Energy Consumption\\energy_forecast\\data\\processed\\PJME_hourly_with_features.csv",
+  "n_rows_total": 145392,
+  "n_train_rows": 116313,
+  "n_val_rows": 14539,
+  "n_test_rows": 14540,
+  "shapes": {
+    "train": {
+      "X": [
+        116122,
+        168,
+        6
+      ],
+      "y": [
+        116122,
+        24
+      ]
+    },
+    "val": {
+      "X": [
+        14348,
+        168,
+        6
+      ],
+      "y": [
+        14348,
+        24
+      ]
+    },
+    "test": {
+      "X": [
+        14349,
+        168,
+        6
+      ],
+      "y": [
+        14349,
+        24
+      ]
+    }
+  },
+  "train_datetime_range": [
+    "2002-01-01 01:00:00",
+    "2015-04-09 09:00:00"
+  ],
+  "val_datetime_range": [
+    "2015-04-09 10:00:00",
+    "2016-12-05 04:00:00"
+  ],
+  "test_datetime_range": [
+    "2016-12-05 05:00:00",
+    "2018-08-03 00:00:00"
+  ]
+}

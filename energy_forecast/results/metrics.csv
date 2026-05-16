@@ -1,0 +1,6 @@
+model,checkpoint,target_col,mae_mw,rmse_mw,mape_pct,n_points
+lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,3502.774298936632,4416.89990104979,11.624812535448765,72000.0
+lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,3985.9882270507815,5020.174602346166,11.772916915739836,12000.0
+lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,5485.270633544922,6574.571224035996,14.738653868238544,4800.0
+lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,4554.4375899158,6025.202559234163,14.407688427625995,344376.0
+lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,4554.4375899158,6025.202559234163,14.407688427625997,344376.0

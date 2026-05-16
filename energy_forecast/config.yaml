@@ -1,0 +1,31 @@
+# PJME — prévision 168 h → 24 h (voir README).
+# Chemins relatifs au dossier energy_forecast/ (parent de ce fichier).
+
+paths:
+  train_pkl: data/processed/train.pkl
+  val_pkl: data/processed/val.pkl
+  test_pkl: data/processed/test.pkl
+  sequence_scaler: data/processed/sequence_scaler.joblib
+  sequence_meta: data/processed/sequence_meta.json
+  checkpoints_dir: results/checkpoints
+
+model:
+  # lstm | bilstm | lstm_attention
+  name: lstm
+  input_dim: 6
+  hidden_size: 64
+  num_layers: 2
+  horizon: 24
+  dropout: 0.2
+  attn_dim: 64
+
+training:
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0
+  max_epochs: 100
+  patience: 10
+  num_workers: 0
+  seed: 42
+
+device: cpu
