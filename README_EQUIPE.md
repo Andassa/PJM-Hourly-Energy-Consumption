@@ -309,8 +309,64 @@ git pull → venv + pip install → build_splits_sequences.py → evaluate (×3)
 
 ### B.1 — Données brutes
 
-Vérifier : `energy_forecast/data/raw/PJME_hourly.csv`  
-(Sinon copier depuis `Hourly Energy Consumption/` à la racine du dépôt parent.)
+#### Où mettre / changer le fichier source
+
+Le pipeline lit **un seul CSV** dans ce dossier :
+
+```
+energy_forecast/data/raw/
+```
+
+| Action | Détail |
+|--------|--------|
+| **Fichier utilisé par le groupe (projet actuel)** | `energy_forecast/data/raw/PJME_hourly.csv` |
+| **Copie à la racine du dépôt** | `Hourly Energy Consumption/PJME_hourly.csv` — **même contenu** que `data/raw/` (copie Kaggle) ; ce n’est pas ce chemin que les scripts lisent directement |
+| **Changer de jeu de données** | Remplacer ou ajouter un `.csv` dans `data/raw/`, puis **refaire** EDA → `preprocessing.py --all` → entraînement (parcours B et C) |
+
+Le notebook EDA cherche en priorité, dans `data/raw/` :
+
+1. `PJME_hourly.csv`
+2. `PJM_Load_hourly.csv`
+3. sinon le premier `*.csv` trouvé
+
+Pour forcer **PJM Load**, ne laisser que `PJM_Load_hourly.csv` dans `data/raw/` (ou retirer `PJME_hourly.csv` temporairement), puis relancer le notebook.
+
+#### Quelle donnée a servi à **notre** entraînement ?
+
+**En une phrase :** nous avons prédit la consommation électrique horaire de la zone **PJM East (PJME)** entre **2002 et 2018**, à partir du fichier **`PJME_hourly.csv`** (colonne `PJME_MW`), après nettoyage dans le notebook — **pas** la charge totale `PJM_Load_hourly.csv`.
+
+Chaîne réelle (pas de lecture directe du dossier `Hourly Energy Consumption\` par `train.py`) :
+
+```text
+data/raw/PJME_hourly.csv
+  → EDA → PJME_hourly_clean.csv
+  → preprocessing → PJME_hourly_with_features.csv
+  → build_splits_sequences → train/val/test.pkl
+  → train.py → best_*.pth
+```
+
+#### PJME vs PJM Load — comparaison
+
+| | **PJME_hourly.csv** (notre étude) | **PJM_Load_hourly.csv** |
+|---|-----------------------------------|-------------------------|
+| **Signification** | Charge de la sous-zone **PJM East** | Charge **totale** du réseau PJM (agrégat) |
+| **Colonne cible** | `PJME_MW` | `PJM_Load_MW` |
+| **Période (fichier du dépôt)** | ~2002 → 2018 (~145 000 h) | ~1999 → 2001 (~33 000 h) |
+| **Modèles / métriques actuels** | Oui (`best_*.pth`, MAE ~1417 MW, etc.) | Non — autre série, autre période |
+
+Ce ne sont **pas** les mêmes grandeurs : on ne peut pas « tester » un modèle entraîné sur PJME avec des données PJM Load comme si c’était le même problème.
+
+#### Peut-on utiliser `PJM_Load_hourly.csv` pour entraîner aussi ?
+
+| Situation | Possible ? |
+|-----------|------------|
+| **Réutiliser** les checkpoints actuels (`best_lstm.pth`, etc.) sur PJM Load | **Non** — autre signal, autre échelle |
+| **Comparer** nos MAE/RMSE PJME avec une run sur PJM Load | **Non** — ce n’est pas comparable |
+| **Lancer un second projet** sur PJM Load (tout refaire) | **Oui** — copier le CSV dans `data/raw/`, EDA, `--all`, `train.py` × 3, `evaluate.py` |
+
+**Attention si vous passez sur PJM Load :** série **beaucoup plus courte** (~3 ans) → moins de fenêtres d’entraînement, résultats et rapport à refaire entièrement, titre de soutenance à adapter (« charge totale PJM » et non « PJM East »).
+
+**Recommandation pour le rendu du groupe :** rester sur **PJME** ; ne mentionner PJM Load que pour expliquer qu’un autre CSV du jeu Kaggle existe mais n’a pas été utilisé pour les chiffres du rapport.
 
 ### B.2 — EDA et nettoyage
 
@@ -568,6 +624,7 @@ Exemple (périodes test) :
 | Push rejeté (> 100 Mo) | Ne pas committer les `.pkl` (déjà dans `.gitignore`) |
 | `Co-authored-by: Cursor` sur GitHub | Désactiver **Commit attribution** dans Cursor ; réécrire le message de commit si besoin |
 | Métriques très différentes des références | Vérifier `n_points` (subset ?), même `.pkl`/scaler, même checkpoint |
+| Confusion PJME / PJM Load | Voir [B.1 — Données brutes](#b1--données-brutes) ; le projet livré utilise **PJME** uniquement |
 
 ---
 
