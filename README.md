@@ -2,7 +2,7 @@
 
 Projet académique de groupe en réseaux de neurones artificiels (RNA).
 
-**Navigation rapide :** [Exécution et avancement](#execution-avancement) · [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
+**Navigation rapide :** [Guide équipe (pull & tests)](README_EQUIPE.md) · [Exécution et avancement](#execution-avancement) · [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
 
 **État du dépôt :** le pipeline `energy_forecast/` est **implémenté et exécuté** (EDA, prétraitement, fenêtres 168→24, trois modèles entraînés et évalués, Diebold–Mariano, heatmaps d’attention, `results/report.html`). Après un clone : régénérer les `.pkl` avec `preprocessing.py --all` (fichiers ignorés par Git, trop volumineux). Livrables restants côté cours : présentation et export PDF — voir [Exécution et avancement](#execution-avancement).
 
@@ -25,13 +25,7 @@ python -m pip install -r requirements.txt
 
 Sous **Git Bash**, utiliser des **slashes** `/` dans les chemins (`energy_forecast/src/train.py`), pas `\`.
 
-**Après `git clone` :** les fichiers `train.pkl`, `val.pkl` et `test.pkl` ne sont pas sur GitHub (limite de taille). Les recréer une fois les CSV intermédiaires disponibles :
-
-```bash
-python energy_forecast/src/preprocessing.py --all
-```
-
-(`--all` enchaîne nettoyage, features, split chronologique et séquences ; voir aussi `build_splits_sequences.py` seul si les CSV existent déjà.)
+**Après `git clone` / `git pull` :** voir le **[README_EQUIPE.md](README_EQUIPE.md)** (parcours rapide, `.pkl`, vérification sans réentraînement). En bref : `python energy_forecast/src/build_splits_sequences.py` si les CSV `*_with_features.csv` sont déjà présents.
 
 ### Chaîne de commandes (données → modèles)
 
