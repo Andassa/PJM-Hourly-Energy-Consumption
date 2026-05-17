@@ -2,9 +2,64 @@
 
 Projet académique de groupe en réseaux de neurones artificiels (RNA).
 
-**Navigation rapide :** [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
+**Navigation rapide :** [Exécution et avancement](#execution-avancement) · [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
 
-**État du dépôt :** documentation et données brutes présentes ; le code applicatif (`energy_forecast/`, scripts, notebooks) est à produire selon ce guide. Ce fichier sert de référence unique pour cadrer le travail, les livrables et l’ordre d’exécution.
+**État du dépôt :** le pipeline `energy_forecast/` est **implémenté et exécuté** (EDA, prétraitement, fenêtres 168→24, trois modèles PyTorch entraînés et évalués sur le test). Il reste principalement le **rapport** (synthèse, figures de loss, heatmap d’attention si demandée), le test **Diebold–Mariano** et éventuellement `report.html` — voir [Exécution et avancement](#execution-avancement).
+
+---
+
+<a id="execution-avancement"></a>
+## Exécution et avancement (référence équipe)
+
+### Installation
+
+À la **racine du dépôt** (là où se trouve `requirements.txt`) :
+
+```bash
+python -m venv .venv
+# Windows (Git Bash) : source .venv/Scripts/activate
+# Windows (PowerShell) : .\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+```
+
+Sous **Git Bash**, utiliser des **slashes** `/` dans les chemins (`energy_forecast/src/train.py`), pas `\`.
+
+### Chaîne de commandes (données → modèles)
+
+Depuis la racine du dépôt, après avoir produit `energy_forecast/data/processed/PJME_hourly_clean.csv` (notebook EDA) :
+
+```bash
+python energy_forecast/src/preprocessing.py --all
+# ou séparément : preprocessing.py puis build_splits_sequences.py
+
+python energy_forecast/src/train.py --config energy_forecast/config.yaml
+python energy_forecast/src/evaluate.py --config energy_forecast/config.yaml
+```
+
+Pour chaque architecture, modifier `model.name` dans `energy_forecast/config.yaml` : `lstm`, `bilstm`, `lstm_attention`, puis relancer train + evaluate. Les checkpoints vont dans `energy_forecast/results/checkpoints/best_<nom>.pth`.
+
+`device` dans `config.yaml` : `cpu` par défaut ; mettre `cuda` si PyTorch GPU est installé.
+
+### Résultats test (PJME, split chronologique, `n_points` = 344 376)
+
+| Modèle | MAE (MW) | RMSE (MW) | MAPE (%) |
+|--------|----------|-----------|----------|
+| LSTM | **1417** | **1982** | **4,50** |
+| Bi-LSTM | 1424 | 1999 | 4,51 |
+| LSTM + attention | 1457 | 2020 | 4,61 |
+
+Détail et historique des runs : `energy_forecast/results/metrics.csv`. Figures : `energy_forecast/results/plots/`.
+
+### Recette : statut des étapes
+
+| # | Étape | Statut |
+|---|--------|--------|
+| 0–2 | Environnement, structure, données `data/raw/` | Fait |
+| 3–7 | EDA, features, split, Min-Max, fenêtres `.pkl` | Fait |
+| 8–10 | `models.py`, train, evaluate, `metrics.csv` | Fait (3 modèles) |
+| 11 | Figures scatter / résidus / fenêtre 24 h | Fait ; courbes loss + heatmap attention : optionnel |
+| 12–13 | Diebold–Mariano, `report.html` | À faire (livrable rapport) |
 
 ---
 
@@ -15,7 +70,7 @@ Projet académique de groupe en réseaux de neurones artificiels (RNA).
 
 **Si tu es assigné à un module précis :** ouvre d’abord [11. Répartition équipe](#11-répartition-équipe-et-jalons), repère ton module (A/B/C/D), puis suis uniquement les **étapes de la recette** qui concernent ce module ; reviens au glossaire et aux maths quand un terme bloque.
 
-**Première action concrète (jour 1) :** vérifier que le fichier `Hourly Energy Consumption/PJME_hourly.csv` est présent ; installer Python 3.10+ ; créer l’environnement virtuel et `requirements.txt` quand le dépôt de code sera initialisé ; ouvrir un notebook vide pour l’EDA et noter la plage de dates réelle après `read_csv`.
+**Première action concrète (nouveau membre) :** cloner le dépôt, installer les dépendances ([§ installation](#execution-avancement)), vérifier `energy_forecast/data/raw/PJME_hourly.csv`, puis suivre la [chaîne de commandes](#execution-avancement). Pour l’EDA : `energy_forecast/notebooks/01_eda_pjm_hourly_load.ipynb`.
 
 **Critère « on a démarré correctement » :** une personne de l’équipe peut expliquer en une phrase ce qu’est une fenêtre **168 → 24**, pourquoi le découpage est **chronologique**, et pourquoi le **Min-Max** se calcule sur le **train seulement**.
 
@@ -374,7 +429,7 @@ Dans ce dépôt, une copie des CSV Kaggle se trouve déjà sous :
 
 `Hourly Energy Consumption/PJME_hourly.csv`
 
-Lorsque la structure `energy_forecast/` sera en place, la convention est de placer (ou de lier) ce fichier dans `energy_forecast/data/raw/PJME_hourly.csv` pour que les scripts et la documentation restent alignés.
+Une copie utilisée par les scripts se trouve dans `energy_forecast/data/raw/PJME_hourly.csv`. Une copie Kaggle peut aussi rester sous `Hourly Energy Consumption/PJME_hourly.csv`.
 
 ### 2.2 Schéma attendu
 
@@ -398,39 +453,38 @@ Avant tout modèle : contrôler doublons d’index, trous dans la série, valeur
 
 ---
 
-## 3. Structure cible du projet
+## 3. Structure du projet (implémentée)
 
-Le code n’est pas encore présent ; la cible est la suivante (à créer à la racine du dépôt ou dans un sous-dossier dédié, selon choix d’équipe, mais **une seule arborescence** pour éviter la confusion) :
+Arborescence actuelle sous `energy_forecast/` (les gros fichiers `.pkl` sont en général **ignorés par Git** ; les régénérer localement avec `preprocessing.py --all`) :
 
 ```
 energy_forecast/
+├── config.yaml
 ├── data/
 │   ├── raw/
 │   │   └── PJME_hourly.csv
 │   └── processed/
-│       ├── train.pkl
-│       ├── val.pkl
-│       └── test.pkl
+│       ├── PJME_hourly_clean.csv
+│       ├── PJME_hourly_with_features.csv
+│       ├── train.pkl, val.pkl, test.pkl
+│       ├── sequence_scaler.joblib
+│       └── sequence_meta.json
 ├── notebooks/
-│   ├── 01_EDA.ipynb
-│   ├── 02_preprocessing.ipynb
-│   └── 03_modeling.ipynb
+│   └── 01_eda_pjm_hourly_load.ipynb
 ├── src/
 │   ├── preprocessing.py
 │   ├── feature_engineering.py
+│   ├── build_splits_sequences.py
 │   ├── models.py
 │   ├── train.py
-│   ├── evaluate.py
-│   └── utils.py
-├── results/
-│   ├── plots/
-│   ├── models/
-│   ├── metrics.csv
-│   └── report.html
-├── requirements.txt
-├── config.yaml
-└── README.md
+│   └── evaluate.py
+└── results/
+    ├── checkpoints/          # best_lstm.pth, best_bilstm.pth, best_lstm_attention.pth, history_*.json
+    ├── plots/                # eval_best_* (scatter, résidus, fenêtre 24 h)
+    └── metrics.csv
 ```
+
+`requirements.txt` est à la **racine** du dépôt Git (parent de `energy_forecast/`).
 
 **Note :** le présent `README.md` à la racine du dépôt peut rester la documentation globale ; à l’ouverture du dossier `energy_forecast/`, un lien ou une copie courte peut renvoyer ici. L’important est qu’**une** entrée documentaire fasse foi pour l’équipe.
 
@@ -684,43 +738,25 @@ Outils possibles : génération programmatique HTML, ou export depuis notebooks 
 - Git  
 - Au moins **4 Go de RAM** (plus confortable pour entraînement local ; GPU optionnel)
 
-### 12.2 Installation (à valider quand `requirements.txt` existera)
+### 12.2 Installation
+
+Voir [Exécution et avancement](#execution-avancement) (venv + `pip install -r requirements.txt` à la racine du dépôt).
+
+### 12.3 Dépendances
+
+Liste complète dans `requirements.txt` à la racine (PyTorch, pandas, scikit-learn, joblib, holidays, pyyaml, matplotlib, jupyter, tqdm, etc.).
+
+### 12.4 Commandes (implémentées)
+
+Depuis la **racine du dépôt** :
 
 ```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+python energy_forecast/src/preprocessing.py --all
+python energy_forecast/src/train.py --config energy_forecast/config.yaml
+python energy_forecast/src/evaluate.py --config energy_forecast/config.yaml
 ```
 
-Linux / macOS : `source venv/bin/activate`
-
-### 12.3 Dépendances prévues
-
-```
-torch>=2.0.0
-pandas>=2.0.0
-numpy>=1.24.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-plotly>=5.15.0
-scikit-learn>=1.3.0
-holidays>=0.30
-pyyaml>=6.0
-jupyter>=1.0.0
-tqdm>=4.65.0
-```
-
-### 12.4 Commandes cibles (après implémentation)
-
-```bash
-python src/preprocessing.py
-python src/train.py --model lstm
-python src/train.py --model bilstm
-python src/train.py --model attention
-python src/evaluate.py
-```
-
-Les arguments exacts (`--model`, chemins, device) sont à harmoniser dans `train.py` et documentés en en-tête de ce README lorsque le code sera stabilisé.
+Le modèle actif est `model.name` dans `energy_forecast/config.yaml` (`lstm` | `bilstm` | `lstm_attention`). Options utiles : `--max-epochs`, `--subset` (debug rapide sur train/val). Evaluate : `--checkpoint` pour forcer un `.pth` précis.
 
 ---
 
@@ -766,6 +802,8 @@ Les arguments exacts (`--model`, chemins, device) sont à harmoniser dans `train
 | Entraînement (Adam, scheduler, early stopping) | Oui | §8, maths M2 |
 | Métriques, figures, attention, DM, HTML | Oui | §9–10, maths M5–M6 |
 | Rôles équipe et jalons | Oui | §11 |
-| **Code source exécutable** | Non (stand-by) | À produire dans `energy_forecast/src/` selon la recette |
+| **Code source exécutable** | Oui | `energy_forecast/src/`, [Exécution](#execution-avancement) |
+| **Trois modèles entraînés + métriques test** | Oui | `results/metrics.csv`, checkpoints `best_*.pth` |
+| **Rapport HTML / Diebold–Mariano** | Partiel / à faire | §9–10, recette étapes 12–13 |
 
-Ce document peut être complété au fil du projet (chemins d’exécution définitifs, figures clés, résultats numériques obtenus). Toute modification de convention (nom des colonnes, loss, agrégation LSTM) doit être **tracée ici ou dans `config.yaml`** pour rester le contrat d’équipe unique.
+Toute modification de convention (nom des colonnes, loss, agrégation LSTM) doit être **tracée ici ou dans `energy_forecast/config.yaml`** pour rester le contrat d’équipe unique.
