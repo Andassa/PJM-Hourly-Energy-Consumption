@@ -4,7 +4,7 @@ Projet académique de groupe en réseaux de neurones artificiels (RNA).
 
 **Navigation rapide :** [Exécution et avancement](#execution-avancement) · [Par où commencer](#guide-debut) · [Recette pas à pas](#recette-projet) · [Glossaire](#glossaire-projet) · [Jargon détaillé](#jargon-detail) · [Mathématiques](#maths-projet) · [Table des matières](#table-des-matieres)
 
-**État du dépôt :** le pipeline `energy_forecast/` est **implémenté et exécuté** (EDA, prétraitement, fenêtres 168→24, trois modèles PyTorch entraînés et évalués sur le test). Il reste principalement le **rapport** (synthèse, figures de loss, heatmap d’attention si demandée), le test **Diebold–Mariano** et éventuellement `report.html` — voir [Exécution et avancement](#execution-avancement).
+**État du dépôt :** le pipeline `energy_forecast/` est **implémenté et exécuté** (EDA, prétraitement, fenêtres 168→24, trois modèles entraînés et évalués, Diebold–Mariano, heatmaps d’attention, `results/report.html`). Après un clone : régénérer les `.pkl` avec `preprocessing.py --all` (fichiers ignorés par Git, trop volumineux). Livrables restants côté cours : présentation et export PDF — voir [Exécution et avancement](#execution-avancement).
 
 ---
 
@@ -25,6 +25,14 @@ python -m pip install -r requirements.txt
 
 Sous **Git Bash**, utiliser des **slashes** `/` dans les chemins (`energy_forecast/src/train.py`), pas `\`.
 
+**Après `git clone` :** les fichiers `train.pkl`, `val.pkl` et `test.pkl` ne sont pas sur GitHub (limite de taille). Les recréer une fois les CSV intermédiaires disponibles :
+
+```bash
+python energy_forecast/src/preprocessing.py --all
+```
+
+(`--all` enchaîne nettoyage, features, split chronologique et séquences ; voir aussi `build_splits_sequences.py` seul si les CSV existent déjà.)
+
 ### Chaîne de commandes (données → modèles)
 
 Depuis la racine du dépôt, après avoir produit `energy_forecast/data/processed/PJME_hourly_clean.csv` (notebook EDA) :
@@ -35,6 +43,10 @@ python energy_forecast/src/preprocessing.py --all
 
 python energy_forecast/src/train.py --config energy_forecast/config.yaml
 python energy_forecast/src/evaluate.py --config energy_forecast/config.yaml
+python energy_forecast/src/plot_training_history.py --config energy_forecast/config.yaml
+python energy_forecast/src/diebold_mariano.py --config energy_forecast/config.yaml
+python energy_forecast/src/plot_attention_heatmap.py --config energy_forecast/config.yaml
+python energy_forecast/src/generate_report.py --config energy_forecast/config.yaml
 ```
 
 Pour chaque architecture, modifier `model.name` dans `energy_forecast/config.yaml` : `lstm`, `bilstm`, `lstm_attention`, puis relancer train + evaluate. Les checkpoints vont dans `energy_forecast/results/checkpoints/best_<nom>.pth`.
@@ -58,8 +70,8 @@ Détail et historique des runs : `energy_forecast/results/metrics.csv`. Figures 
 | 0–2 | Environnement, structure, données `data/raw/` | Fait |
 | 3–7 | EDA, features, split, Min-Max, fenêtres `.pkl` | Fait |
 | 8–10 | `models.py`, train, evaluate, `metrics.csv` | Fait (3 modèles) |
-| 11 | Figures scatter / résidus / fenêtre 24 h | Fait ; courbes loss + heatmap attention : optionnel |
-| 12–13 | Diebold–Mariano, `report.html` | À faire (livrable rapport) |
+| 11 | Figures scatter / résidus / fenêtre 24 h + courbes loss + heatmap attention | Fait (`results/plots/`, `plot_attention_heatmap.py`) |
+| 12–13 | Diebold–Mariano, `report.html` | Fait (`results/dm_results.csv`, `results/report.html`) |
 
 ---
 
@@ -804,6 +816,7 @@ Le modèle actif est `model.name` dans `energy_forecast/config.yaml` (`lstm` | `
 | Rôles équipe et jalons | Oui | §11 |
 | **Code source exécutable** | Oui | `energy_forecast/src/`, [Exécution](#execution-avancement) |
 | **Trois modèles entraînés + métriques test** | Oui | `results/metrics.csv`, checkpoints `best_*.pth` |
-| **Rapport HTML / Diebold–Mariano** | Partiel / à faire | §9–10, recette étapes 12–13 |
+| **Rapport HTML** | Oui | `results/report.html` via `generate_report.py` |
+| **Diebold–Mariano + heatmap attention** | Oui | `dm_results.csv`, `attn_heatmap_*.png` |
 
 Toute modification de convention (nom des colonnes, loss, agrégation LSTM) doit être **tracée ici ou dans `energy_forecast/config.yaml`** pour rester le contrat d’équipe unique.

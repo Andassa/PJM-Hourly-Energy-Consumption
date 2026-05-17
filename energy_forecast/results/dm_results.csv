@@ -1,0 +1,4 @@
+model_a,model_b,loss,dm_stat,p_value,significant_5pct,mean_loss_diff,interpretation
+lstm,bilstm,mse,-3.285340379140952,0.0010185923836740773,True,-67741.296875,lstm est significativement meilleur que bilstm (alpha=0.05).
+lstm,lstm_attention,mse,-5.4620274060831955,4.707273859594352e-08,True,-154855.140625,lstm est significativement meilleur que lstm_attention (alpha=0.05).
+bilstm,lstm_attention,mse,-2.9396512075092174,0.0032858190131634935,True,-87113.8359375,bilstm est significativement meilleur que lstm_attention (alpha=0.05).

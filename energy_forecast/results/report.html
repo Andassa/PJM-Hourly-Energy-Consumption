@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rapport — Prévision charge PJME (LSTM / Bi-LSTM / Attention)</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --text: #1a1d26;
+      --muted: #5c6578;
+      --accent: #1e5a8a;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 2rem 1rem 4rem;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; color: var(--accent); margin-bottom: 0.25rem; }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid var(--accent);
+    }
+    .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    th { background: #eef3f9; }
+    tr.best { background: #e8f4ea; font-weight: 600; }
+    .fig { margin: 1.25rem 0; text-align: center; }
+    .fig img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .fig figcaption {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    ul { padding-left: 1.25rem; }
+    code { background: #eef3f9; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem 1.5rem;
+    }
+    @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Prévision horaire de la charge PJM East (PJME)</h1>
+    <p class="meta">Rapport généré automatiquement — 2026-05-17 02:36 UTC<br />
+    Projet RNA — fenêtre 168 h → horizon 24 h — split chronologique 80 / 10 / 10</p>
+
+    <section>
+      <h2>1. Contexte et objectif</h2>
+      <p>
+        Ce projet prédit la consommation électrique horaire de la zone <strong>PJME</strong>
+        (PJM East) à partir de l’historique récent et de variables calendaires.
+        L’entrée du modèle est une fenêtre de <strong>168 heures</strong> ;
+        la sortie est un vecteur de <strong>24 valeurs</strong> (les 24 prochaines heures de charge).
+      </p>
+      <p>
+        Trois architectures sont comparées : <strong>LSTM</strong>, <strong>Bi-LSTM</strong> et
+        <strong>LSTM avec attention additive (Bahdanau)</strong>. Les métriques finales sont calculées
+        sur le jeu de <strong>test</strong> uniquement (2016-12-05 05:00:00 → 2018-08-03 00:00:00),
+        après dénormalisation en mégawatts (MW).
+      </p>
+    </section>
+
+    <section>
+      <h2>2. Données et prétraitement</h2>
+      <ul>
+        <li>Source : série horaire <code>PJME_hourly.csv</code> (Kaggle PJM Hourly Energy Consumption).</li>
+        <li>Nettoyage DST : agrégation des doublons d’horodatage, grille 1 h complète, interpolation linéaire.</li>
+        <li>Features : <code>dow, hour, is_holiday, is_weekend, month</code> + cible <code>PJME_MW</code>.</li>
+        <li>Normalisation Min-Max ajustée sur le <strong>train</strong> seulement, puis appliquée au val et test.</li>
+        <li>Lignes totales après features : 145392 ; train / val / test : 116313 / 14539 / 14540.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Hyperparamètres (communs aux trois modèles)</h2>
+      <div class="grid-2">
+        <div>
+          <table>
+            <tr><th>Paramètre</th><th>Valeur</th></tr>
+            <tr><td>hidden_size</td><td>64</td></tr>
+            <tr><td>num_layers</td><td>2</td></tr>
+            <tr><td>dropout</td><td>0.2</td></tr>
+            <tr><td>attn_dim (attention)</td><td>64</td></tr>
+            <tr><td>input_dim</td><td>6</td></tr>
+          </table>
+        </div>
+        <div>
+          <table>
+            <tr><th>Entraînement</th><th>Valeur</th></tr>
+            <tr><td>batch_size</td><td>64</td></tr>
+            <tr><td>learning rate (Adam)</td><td>0.001</td></tr>
+            <tr><td>max_epochs</td><td>100</td></tr>
+            <tr><td>early stopping (patience)</td><td>10</td></tr>
+            <tr><td>device</td><td>cpu</td></tr>
+            <tr><td>seed</td><td>42</td></tr>
+          </table>
+        </div>
+      </div>
+      <p style="margin-top:1rem;"><strong>Loss :</strong> MSE sur les 24 pas de sortie (charge normalisée pendant l’entraînement).</p>
+    </section>
+
+    <section>
+      <h2>4. Architectures (résumé)</h2>
+      <ul>
+        <li><strong>LSTM</strong> : encode la fenêtre de 168 pas ; la dernière sortie temporelle alimente une couche linéaire vers 24 prédictions.</li>
+        <li><strong>Bi-LSTM</strong> : deux LSTM (sens direct et inverse) ; concaténation au dernier pas, puis tête linéaire 24 h.</li>
+        <li><strong>LSTM + attention</strong> : encodeur LSTM + scores d’attention softmax sur les 168 pas (Bahdanau) ; contexte + état final → 24 h.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>5. Résultats sur le jeu de test (MW)</h2>
+      <p>Meilleur modèle sur ce run (MAE la plus faible) : <strong>lstm</strong>.</p>
+      <table>
+        <tr>
+          <th>Modèle</th>
+          <th>MAE (MW)</th>
+          <th>RMSE (MW)</th>
+          <th>MAPE (%)</th>
+        </tr>
+        <tr class="best"><td>lstm</td><td>1417.2</td><td>1981.7</td><td>4.50</td></tr>
+<tr><td>bilstm</td><td>1423.8</td><td>1998.7</td><td>4.51</td></tr>
+<tr><td>lstm_attention</td><td>1457.4</td><td>2020.4</td><td>4.61</td></tr>
+<tr><td>lstm</td><td>4554.4</td><td>6025.2</td><td>14.41</td></tr>
+<tr><td>lstm</td><td>4554.4</td><td>6025.2</td><td>14.41</td></tr>
+
+      </table>
+      <p class="meta" style="margin-top:0.75rem;">
+        Source : <code>results/metrics.csv</code> — évaluation complète (344376 points horaires agrégés).
+      </p>
+    </section>
+
+    <section>
+      <h2>6. Figures d’évaluation (test)</h2>
+      
+    <figure class="fig">
+      <img src="plots/eval_best_lstm_scatter.png" alt="LSTM — nuage observé vs prédit (test, MW)" loading="lazy" />
+      <figcaption>LSTM — nuage observé vs prédit (test, MW)</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/eval_best_lstm_window_1280.png" alt="LSTM — exemple d’horizon 24 h (fenêtre test)" loading="lazy" />
+      <figcaption>LSTM — exemple d’horizon 24 h (fenêtre test)</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/eval_best_bilstm_scatter.png" alt="Bi-LSTM — nuage observé vs prédit (test, MW)" loading="lazy" />
+      <figcaption>Bi-LSTM — nuage observé vs prédit (test, MW)</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/eval_best_bilstm_window_1280.png" alt="Bi-LSTM — exemple d’horizon 24 h (fenêtre test)" loading="lazy" />
+      <figcaption>Bi-LSTM — exemple d’horizon 24 h (fenêtre test)</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/eval_best_lstm_attention_scatter.png" alt="LSTM + attention (Bahdanau) — nuage observé vs prédit (test, MW)" loading="lazy" />
+      <figcaption>LSTM + attention (Bahdanau) — nuage observé vs prédit (test, MW)</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/eval_best_lstm_attention_window_1280.png" alt="LSTM + attention (Bahdanau) — exemple d’horizon 24 h (fenêtre test)" loading="lazy" />
+      <figcaption>LSTM + attention (Bahdanau) — exemple d’horizon 24 h (fenêtre test)</figcaption>
+    </figure>
+    
+    </section>
+
+    <section>
+      <h2>7. Courbes d’apprentissage (train / validation)</h2>
+      
+    <figure class="fig">
+      <img src="plots/loss_all_models.png" alt="Courbes MSE train / validation (données normalisées)" loading="lazy" />
+      <figcaption>Courbes MSE train / validation (données normalisées)</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/loss_lstm.png" alt="LSTM — détail des pertes par époque" loading="lazy" />
+      <figcaption>LSTM — détail des pertes par époque</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/loss_bilstm.png" alt="Bi-LSTM — détail des pertes par époque" loading="lazy" />
+      <figcaption>Bi-LSTM — détail des pertes par époque</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/loss_lstm_attention.png" alt="LSTM + attention (Bahdanau) — détail des pertes par époque" loading="lazy" />
+      <figcaption>LSTM + attention (Bahdanau) — détail des pertes par époque</figcaption>
+    </figure>
+    
+    </section>
+
+    <section>
+      <h2>8. Test de Diebold–Mariano</h2>
+      
+      <p>Comparaison des pertes au niveau de chaque point prédit (test, MW).
+      <code>d = L(a) − L(b)</code> ; p &lt; 0,05 : différence significative à 5 %.</p>
+      <table>
+        <tr><th>Modèle A</th><th>Modèle B</th><th>Loss</th><th>DM</th><th>p-valeur</th><th>Sig. 5 %</th></tr>
+        <tr><td>lstm</td><td>bilstm</td><td>mse</td><td>-3.2853</td><td>0.0010</td><td>oui</td></tr><tr><td>lstm</td><td>lstm_attention</td><td>mse</td><td>-5.4620</td><td>0.0000</td><td>oui</td></tr><tr><td>bilstm</td><td>lstm_attention</td><td>mse</td><td>-2.9397</td><td>0.0033</td><td>oui</td></tr>
+      </table>
+      <ul><li>lstm est significativement meilleur que bilstm (alpha=0.05).</li><li>lstm est significativement meilleur que lstm_attention (alpha=0.05).</li><li>bilstm est significativement meilleur que lstm_attention (alpha=0.05).</li></ul>
+        
+    </section>
+
+    <section>
+      <h2>9. Interprétation de l’attention (LSTM + Bahdanau)</h2>
+      
+    <figure class="fig">
+      <img src="plots/attn_heatmap_window_1280.png" alt="Exemple de poids d&#x27;attention sur une fenêtre test" loading="lazy" />
+      <figcaption>Exemple de poids d&#x27;attention sur une fenêtre test</figcaption>
+    </figure>
+    
+    <figure class="fig">
+      <img src="plots/attn_heatmap_mean_200windows.png" alt="Poids d&#x27;attention moyens sur plusieurs fenêtres" loading="lazy" />
+      <figcaption>Poids d&#x27;attention moyens sur plusieurs fenêtres</figcaption>
+    </figure>
+    
+    </section>
+
+    <section>
+      <h2>10. Discussion</h2>
+      <p>
+        Les trois modèles obtiennent des erreurs du même ordre de grandeur sur le test.
+        Le <strong>lstm</strong> affiche légèrement les meilleures métriques dans cette configuration
+        (hidden_size=64, pas de recherche systématique d’hyperparamètres).
+      </p>
+      <p>
+        Les tests DM indiquent si les écarts de performance entre paires de modèles sont
+        statistiquement distinguables au seuil de 5 %, au-delà de la seule comparaison des moyennes (MAE/RMSE).
+      </p>
+    </section>
+
+    <section>
+      <h2>11. Reproductibilité</h2>
+      <pre style="background:#eef3f9;padding:1rem;border-radius:6px;overflow:auto;font-size:0.85rem;">python energy_forecast/src/preprocessing.py --all
+python energy_forecast/src/train.py --config energy_forecast/config.yaml
+python energy_forecast/src/evaluate.py --config energy_forecast/config.yaml
+python energy_forecast/src/plot_training_history.py --config energy_forecast/config.yaml
+python energy_forecast/src/diebold_mariano.py --config energy_forecast/config.yaml
+python energy_forecast/src/plot_attention_heatmap.py --config energy_forecast/config.yaml
+python energy_forecast/src/generate_report.py --config energy_forecast/config.yaml</pre>
+    </section>
+  </div>
+</body>
+</html>

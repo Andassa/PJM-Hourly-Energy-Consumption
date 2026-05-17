@@ -1,3 +1,7 @@
-energy_forecast/data/processed/test.pkl energy_forecast/data/processed/train.pkl energy_forecast/data/processed/val.pkl
-energy_forecast/data/processed/test.pkl energy_forecast/data/processed/train.pkl energy_forecast/data/processed/test.pkl
-energy_forecast/data/processed/test.pkl energy_forecast/data/processed/train.pkl energy_forecast/data/processed/train.pkl
+# Séquences volumineuses (régénérer avec build_splits_sequences.py)
+energy_forecast/data/processed/train.pkl
+energy_forecast/data/processed/val.pkl
+energy_forecast/data/processed/test.pkl
+
+__pycache__/
+*.py[cod]

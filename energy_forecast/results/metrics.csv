@@ -1,6 +1,4 @@
 model,checkpoint,target_col,mae_mw,rmse_mw,mape_pct,n_points
-lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,3502.774298936632,4416.89990104979,11.624812535448765,72000.0
-lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,3985.9882270507815,5020.174602346166,11.772916915739836,12000.0
-lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,5485.270633544922,6574.571224035996,14.738653868238544,4800.0
-lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,4554.4375899158,6025.202559234163,14.407688427625995,344376.0
-lstm,C:\Users\fanomezantsoa\Desktop\PJM Hourly Energy Consumption\energy_forecast\results\checkpoints\best_lstm.pth,PJME_MW,4554.4375899158,6025.202559234163,14.407688427625997,344376.0
+lstm,energy_forecast/results/checkpoints/best_lstm.pth,PJME_MW,1417.1581744953191,1981.7103312266595,4.503016642121514,344376.0
+bilstm,energy_forecast/results/checkpoints/best_bilstm.pth,PJME_MW,1423.8413649797023,1998.7288791751455,4.512639301199646,344376.0
+lstm_attention,energy_forecast/results/checkpoints/best_lstm_attention.pth,PJME_MW,1457.3785899510092,2020.4036675443547,4.609086531441997,344376.0
